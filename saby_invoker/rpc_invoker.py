@@ -1,27 +1,26 @@
-from uuid import UUID
 import requests
+import urllib.parse as urlparse
 try:
     import simplejson
 except ImportError:
     raise RuntimeError("Не найдена библиотека simplejson! Пожалуйста установите ее.")
 
-from saby_parser import parse_result
+from saby_invoker.saby_formats_parser import parse_result
 
 
 class RpcInvoker():
     """
     Класс вызова методов СБИС
     """
-    def __init__(self, address: str, session_id: UUID=None):
+    def __init__(self, address: str, session_id: str=None):
         """
         Создает экземпляр класса RpcInvoker
         :param address: адрес сайта, на который будет отправлен запрос
         :type address: str
         :param session_id: идентификатор сессии, defaults to None
-        :param session_id: UUID, optional
+        :param session_id: str, optional
         """
-
-        self.address = "{addres}/service/sbis-rpc-service300.dll"
+        self.address = urlparse.urljoin(address, "/service/sbis-rpc-service300.dll")
 
         if session_id is None:
             with open('session', 'r') as session_file:
@@ -50,6 +49,7 @@ class RpcInvoker():
         response = simplejson.loads(requests.post(url=self.address, data=body, headers=headers).text)
 
         if 'error' in response:
-            return {'error': response['error']['details']}
+            error = response['error']
+            return {'error': error['details'] if type(error) is dict else error}
 
         return parse_result(response['result'])
