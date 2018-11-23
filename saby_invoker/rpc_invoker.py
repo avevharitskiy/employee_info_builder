@@ -46,7 +46,12 @@ class RpcInvoker():
 
         headers = {"Content-Type": "application/JSON; charset=utf-8", "X-SBISSessionID": self.session}
 
-        response = simplejson.loads(requests.post(url=self.address, data=body, headers=headers).text)
+        response = requests.post(url=self.address, data=body, headers=headers)
+
+        if not response.ok:
+            return {'error': "{code}: {reason}".format(code=response.status_code, reason=response.reason)}
+
+        response = simplejson.loads(response.text)
 
         if 'error' in response:
             error = response['error']
