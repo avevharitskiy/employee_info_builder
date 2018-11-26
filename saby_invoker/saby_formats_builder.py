@@ -47,10 +47,10 @@ def build_record(dictionary: dict,) -> dict:
 
     record_dict = {'_type': 'record', 's': [], 'd': []}
 
-    for key, value in dictionary:
+    for key, value in dictionary.items():
         saby_converter = None
 
-        if type(value) not in SABY_TYPES + [list, dict]:
+        if type(value) not in list(SABY_TYPES) + [list, dict]:
             raise TypeError("Неверный тип значения в записи!")
 
         # check simple types
