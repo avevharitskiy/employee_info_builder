@@ -4,11 +4,10 @@
 Если неоходимо передать внутри Record`a JSON неоходимо передать его в виде:
 {
     "_type": "JSON"
-    "value": {/*словарь который необходимо передать в виде json объекта*/}
+    "_value": {/*словарь который необходимо передать в виде json объекта*/}
 }
 """
 import base64
-import json
 from collections import namedtuple
 from datetime import date, datetime
 from decimal import Decimal
@@ -33,6 +32,13 @@ def build_recordset(value):
 
     elif __check_broken_format(value):
         raise TypeError("Формат записей внутри списка должен быть одинаков!")
+    recordset_dict = {'_type': 'recordset'}
+    records_list = [build_record(row) for row in value]
+
+    recordset_dict['s'] = records_list[0].get("s")
+    recordset_dict['d'] = [record.get('d') for record in records_list]
+
+    return recordset_dict
 
 
 def build_record(dictionary: dict,) -> dict:
@@ -53,6 +59,7 @@ def build_record(dictionary: dict,) -> dict:
         # check JSON or Record type
         elif type(value) is dict:
             is_json = str(value.get('_type', None)).lower() == 'json'
+            value = value.get('_value', None)
             saby_converter = SABY_TYPES['json'] if is_json else SABY_TYPES['record']
 
         # check Array or RecordSet type
@@ -70,6 +77,9 @@ def build_record(dictionary: dict,) -> dict:
         record_dict['s'].append({'n': key, 't': saby_converter.type})
         record_dict['d'].append(saby_converter.converter(value))
 
+    return record_dict
+
+
 SABY_TYPES = {
     date: saby_type_meta("Дата", lambda val: str(val)),
     datetime: saby_type_meta("Дата и время", lambda val: str(val)),
@@ -81,7 +91,7 @@ SABY_TYPES = {
     bytearray: byte_saby_meta,
     bytes: byte_saby_meta,
     bool: saby_type_meta("Логическое", lambda val: val),
-    'json': saby_type_meta('JSON-объект', lambda val: json.dumps(val)),
+    'json': saby_type_meta('JSON-объект', lambda val: val),
     'record': saby_type_meta("Запись", lambda val: build_record(val)),
     'recordset': saby_type_meta("Выборка", lambda val: build_recordset(val)),
     'array': saby_type_meta({"n": "Массив"}, lambda val: val)
