@@ -14,7 +14,7 @@ flask_server = Flask(__name__)
 def about():
     """
         Возвращает информацию о сервере
-    :return: информация о сервере
+        :return: информация о сервере
     """
     return "This is Flask server."
 
