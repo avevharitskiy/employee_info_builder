@@ -8,6 +8,7 @@
 }
 """
 import base64
+import json
 from collections import namedtuple
 from datetime import date, datetime
 from decimal import Decimal
@@ -16,6 +17,59 @@ from uuid import UUID
 saby_type_meta = namedtuple("saby_meta", 'type, converter')
 
 byte_saby_meta = saby_type_meta("Двоичное", lambda val: base64.b64encode(val).decode())
+
+
+def __check_broken_format(value):
+    recordset_format = set(value[0])
+    for ind in range(1, len(value)):
+        if recordset_format ^ set(value[ind]):
+            return True
+    return False
+
+
+def build_recordset(value):
+    if not all(isinstance(val, dict) for val in value):
+        raise TypeError("Все значения в списке должны быть словарями!")
+
+    elif __check_broken_format(value):
+        raise TypeError("Формат записей внутри списка должен быть одинаков!")
+
+
+def build_record(dictionary: dict,) -> dict:
+    if type(dictionary) is not dict:
+        raise TypeError("Значение аргумента не является словарем!")
+
+    record_dict = {'_type': 'record', 's': [], 'd': []}
+
+    for key, value in dictionary:
+        saby_converter = None
+
+        if type(value) not in SABY_TYPES + [list, dict]:
+            raise TypeError("Неверный тип значения в записи!")
+
+        # check simple types
+        if type(value) in SABY_TYPES:
+            saby_converter = SABY_TYPES[type(value)]
+        # check JSON or Record type
+        elif type(value) is dict:
+            is_json = str(value.get('_type', None)).lower() == 'json'
+            saby_converter = SABY_TYPES['json'] if is_json else SABY_TYPES['record']
+
+        # check Array or RecordSet type
+        elif type(value) is list:
+            list_type = type(value[0])
+
+            if not all(isinstance(val, list_type) for val in value):
+                raise TypeError("Значения в списке имеют разлиный тип!")
+
+            saby_converter = SABY_TYPES['recordset'] if list_type is dict else SABY_TYPES['array']
+
+            if list_type is not dict:
+                saby_converter.type['t'] = SABY_TYPES[list_type].type
+
+        record_dict['s'].append({'n': key, 't': saby_converter.type})
+        record_dict['d'].append(saby_converter.converter(value))
+
 SABY_TYPES = {
     date: saby_type_meta("Дата", lambda val: str(val)),
     datetime: saby_type_meta("Дата и время", lambda val: str(val)),
@@ -27,28 +81,8 @@ SABY_TYPES = {
     bytearray: byte_saby_meta,
     bytes: byte_saby_meta,
     bool: saby_type_meta("Логическое", lambda val: val),
+    'json': saby_type_meta('JSON-объект', lambda val: json.dumps(val)),
+    'record': saby_type_meta("Запись", lambda val: build_record(val)),
+    'recordset': saby_type_meta("Выборка", lambda val: build_recordset(val)),
+    'array': saby_type_meta({"n": "Массив"}, lambda val: val)
 }
-
-SPECIAL_TYPES = [list, dict]
-
-
-def build_record(dictionary: dict,) -> dict:
-    if type(dictionary) is not dict:
-        raise TypeError("Значение аргумента не является словарем!")
-
-    record_dict = {'_type': 'record', 's': [], 'd': []}
-
-    for key, value in dictionary:
-        # check unsupported types
-        if type(value) not in list(SABY_TYPES) + SPECIAL_TYPES:
-            raise TypeError("Значение словаря имеет не поддерживаемый тип!")
-        
-        # check simple types
-        elif type(value) in SABY_TYPES:
-            saby_converter = SABY_TYPES[type(value)]
-            record_dict['d'].append(saby_converter.converter(value))
-            record_dict['s'].append({'n': key, 's': saby_converter.type})
-        
-        # check complicated types
-        elif type(value) in SPECIAL_TYPES:
-            
