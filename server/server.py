@@ -3,10 +3,9 @@
     Предоставляет API проекта.
 """
 
-try:
-    from flask import Flask
-except ImportError:
-    print("Can't import flask")
+from flask import Flask
+
+import json
 
 flask_server = Flask(__name__)
 
