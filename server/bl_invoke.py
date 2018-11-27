@@ -11,13 +11,14 @@ sys.path.append('../saby_invoker')
 import saby_formats_parser
 
 
-def get_contacts(sid, pid, query_str, contragent):
+def get_contacts(sid, pid, query_str, contragent, record_limit=10):
     """
         Возвращает список контактов по строке строке запроса.
         :param sid: идентификатор сессии
         :param pid: идентификатор пользователя
         :param query_str: строка запроса
         :param contragent: идентификатор контрагента
+        :param record_limit=10: ограничение на количество возвращаемых записей
         :return: список сотрудников
     """
     # Проверка параметров
@@ -83,7 +84,7 @@ def get_contacts(sid, pid, query_str, contragent):
     payload = json.dumps(payload)
 
     # Указываем адрес на который необходимо направлять запрос
-    url = 'https://fix-online.sbis.ru/service/?x_version=3.18.620.c-246'
+    url = 'https://fix-online.sbis.ru/service/'
 
     # Отправляем запрос
     response = requests.post(url, data=payload, headers=headers, cookies=cookies)
@@ -97,7 +98,7 @@ def get_contacts(sid, pid, query_str, contragent):
     # Парсим ответ БЛ (Получаем результат в виде нативных типов и структур)
     result = parse_result(response)
 
-    return result
+    return result[:record_limit]
 
 def parse_result(body):
     """
