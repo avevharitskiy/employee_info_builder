@@ -11,6 +11,9 @@ sys.path.append('../saby_invoker')
 import saby_formats_parser
 
 
+# URL на который идут запросы
+ONLINE_URL = 'https://fix-online.sbis.ru'
+
 def get_contacts(sid, pid, query_str, contragent, record_limit=10):
     """
         Возвращает список контактов по строке строке запроса.
@@ -84,7 +87,7 @@ def get_contacts(sid, pid, query_str, contragent, record_limit=10):
     payload = json.dumps(payload)
 
     # Указываем адрес на который необходимо направлять запрос
-    url = 'https://fix-online.sbis.ru/service/'
+    url = ONLINE_URL + '/service/'
 
     # Отправляем запрос
     response = requests.post(url, data=payload, headers=headers, cookies=cookies)
@@ -101,7 +104,34 @@ def get_contacts(sid, pid, query_str, contragent, record_limit=10):
     # Выбираем только сотрудников
     contacts = select_only_person(contacts_records, record_limit)
 
+    # Приводим к нужному формату
+    contacts = formatting(contacts)
+
     return contacts
+
+def formatting(records):
+    """
+        Приводит записи к формату, необходимому для UI мобилки
+        :param records: список записей с сотрудниками
+        :return: список записей сотрудников с необходимыми полями
+    """
+    result = []
+    for record in records:
+        employee = {}
+        # Получаем простые поля
+        employee['postName'] = record.get('ПодразделениеНазвание')
+        employee['secondName'] = record.get('Фамилия')
+        employee['id'] = record.get('ИдСервисаПрофилей')
+        employee['name'] = record.get('Имя')
+        # Получаем информацию о фото
+        photo_info = record.get('PhotoData')
+        photo_url = photo_info.get('url', '')
+        if photo_url:
+            photo_url = ONLINE_URL + photo_url
+        employee['photoUrl'] = photo_url
+        result.append(employee)
+    return result
+
 
 def select_only_person(records, record_limit):
     """
