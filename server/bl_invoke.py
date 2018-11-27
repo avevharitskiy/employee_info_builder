@@ -96,9 +96,28 @@ def get_contacts(sid, pid, query_str, contragent, record_limit=10):
         raise Exception('Сервер вернул код ответа отличный от 200. Детали: {response}'.format(response=str(response)))
 
     # Парсим ответ БЛ (Получаем результат в виде нативных типов и структур)
-    result = parse_result(response)
+    contacts_records = parse_result(response)
 
-    return result[:record_limit]
+    # Выбираем только сотрудников
+    contacts = select_only_person(contacts_records, record_limit)
+
+    return contacts
+
+def select_only_person(records, record_limit):
+    """
+        Выбирает только персоны (сотрудники) из выборки сотрудников.
+        Т.к. в выборке сотрудников могут быть еще и разделы.
+        :param records: список записей сотрудников
+        :param record_limit: ограничение на размер количества записей в результате
+        :return: список сотрудников
+    """
+    result = []
+    for record in records:
+        if not record.get('Раздел@'):
+            result.append(record)
+            if len(result) >= record_limit:
+                break
+    return result
 
 def parse_result(body):
     """
