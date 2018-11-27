@@ -41,6 +41,9 @@ def contacts():
 
         # Вызываем метод получения контактов
         contacts = bl_invoke.get_contacts(sid, pid, query_str, contragent, record_limit)
+
+        # Преобразуем в JSON
+        contacts = json.dumps(contacts)
     except Exception as exc:
         return str(exc), 500
     return str(contacts)
