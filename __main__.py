@@ -2,7 +2,7 @@
 import os
 from inspect import getsourcefile
 
-from api.data_getter import test
+from api.data_miner import test
 from helpers import Configuration, Database
 from saby_invoker import SabyInvoker
 
@@ -17,7 +17,7 @@ Configuration.load_configuration()
 Database.connect_to_database()
 
 #   init RpcInvoker
-SabyInvoker.initialize('https://fix-online.sbis.ru', '00000003-00066e3e-00ba-ee83ead632bd18d9')
+SabyInvoker.initialize()
 
 #   TODO: add flask running
 

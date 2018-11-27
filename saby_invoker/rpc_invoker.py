@@ -4,7 +4,7 @@ import requests
 import simplejson
 
 from helpers import Configuration
-from saby_invoker.saby_formats_parser import parse_result
+from saby_invoker.saby_formats_parser import parse_value
 
 
 class RpcInvoker():
@@ -12,7 +12,7 @@ class RpcInvoker():
     Класс вызова методов СБИС
     """
     @classmethod
-    def initialize(cls, address: str, session_id: str = None):
+    def initialize(cls, address: str = None, session_id: str = None):
         """
         Инициализирует RpcInvoker
         :param address: адрес сайта, на который будет отправлен запрос
@@ -20,11 +20,17 @@ class RpcInvoker():
         :param session_id: идентификатор сессии, defaults to None
         :param session_id: str, optional
         """
+        if not address:
+            try:
+                address = Configuration.app_config['SABY']['site']
+            except KeyError:
+                raise KeyError("В файле конфигурации не указан сайт СБИС!")
+
         cls.__address = urlparse.urljoin(address, "/service/sbis-rpc-service300.dll")
 
         if session_id is None:
             try:
-                cls.__session = Configuration.app_config['Connection']['ssid']
+                cls.__session = Configuration.app_config['SABY']['ssid']
             except KeyError:
                 raise KeyError("В файле конфигурации не указан идентификатор сессии!")
         else:
@@ -60,4 +66,4 @@ class RpcInvoker():
             error = response['error']
             return {'error': error['details'] if type(error) is dict else error}
 
-        return parse_result(response['result'])
+        return parse_value(response['result'])

@@ -20,8 +20,9 @@ class Database():
         cls.__cursor = cls.__connection.cursor()
 
     @classmethod
-    def query(cls, query_str: str):
-        cls.__cursor.execute(query_str)
+    def query(cls, query_str: str, fields=None):
+        cls.__cursor.execute(query_str, fields)
         cls.__connection.commit()
 
-        return cls.__cursor.fetchall()
+        if cls.__cursor.description:
+            return cls.__cursor.fetchall()

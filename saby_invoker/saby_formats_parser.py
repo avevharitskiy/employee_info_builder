@@ -24,9 +24,16 @@ def __parse_recordset(recordset_dict: dict) -> list:
     :return: SABY RecordSet converted to list of dicts
     :rtype: list
     """
-
     keys = __get_keys(recordset_dict)
-    return [__parse_record({'d': row}, keys) for row in recordset_dict['d']]
+    recordset = [__parse_record({'d': row}, keys) for row in recordset_dict['d']]
+
+    if "r" in recordset_dict:
+        result = {}
+        result['rec'] = recordset
+        result['outcome'] = parse_value(recordset_dict['r'])
+        return result
+
+    return recordset
 
 
 def __parse_record(record_dict: dict, keys: list = None) -> dict:
@@ -55,7 +62,7 @@ def __parse_record(record_dict: dict, keys: list = None) -> dict:
     return result
 
 
-def parse_result(result):
+def parse_value(value):
     """
     Parse SABY method result to python types
 
@@ -63,11 +70,11 @@ def parse_result(result):
     :return: SABY method result converted to python types
     """
 
-    if type(result) is not dict:
-        return result
+    if type(value) is not dict:
+        return value
 
-    saby_type = result.get('_type', None)
-    return AVAILABLE_TYPES.get(saby_type, __parse_default)(result)
+    saby_type = value.get('_type', None)
+    return AVAILABLE_TYPES.get(saby_type, __parse_default)(value)
 
 
 AVAILABLE_TYPES = {
