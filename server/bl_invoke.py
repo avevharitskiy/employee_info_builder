@@ -11,13 +11,17 @@ sys.path.append('../saby_invoker')
 import saby_formats_parser
 
 
-def get_contacts(sid, pid, query_str, contragent):
+# URL на который идут запросы
+ONLINE_URL = 'https://fix-online.sbis.ru'
+
+def get_contacts(sid, pid, query_str, contragent, record_limit=10):
     """
         Возвращает список контактов по строке строке запроса.
         :param sid: идентификатор сессии
         :param pid: идентификатор пользователя
         :param query_str: строка запроса
         :param contragent: идентификатор контрагента
+        :param record_limit=10: ограничение на количество возвращаемых записей
         :return: список сотрудников
     """
     # Проверка параметров
@@ -83,7 +87,7 @@ def get_contacts(sid, pid, query_str, contragent):
     payload = json.dumps(payload)
 
     # Указываем адрес на который необходимо направлять запрос
-    url = 'https://fix-online.sbis.ru/service/?x_version=3.18.620.c-246'
+    url = ONLINE_URL + '/service/'
 
     # Отправляем запрос
     response = requests.post(url, data=payload, headers=headers, cookies=cookies)
@@ -95,8 +99,54 @@ def get_contacts(sid, pid, query_str, contragent):
         raise Exception('Сервер вернул код ответа отличный от 200. Детали: {response}'.format(response=str(response)))
 
     # Парсим ответ БЛ (Получаем результат в виде нативных типов и структур)
-    result = parse_result(response)
+    contacts_records = parse_result(response)
 
+    # Выбираем только сотрудников
+    contacts = select_only_person(contacts_records, record_limit)
+
+    # Приводим к нужному формату
+    contacts = formatting(contacts)
+
+    return contacts
+
+def formatting(records):
+    """
+        Приводит записи к формату, необходимому для UI мобилки
+        :param records: список записей с сотрудниками
+        :return: список записей сотрудников с необходимыми полями
+    """
+    result = []
+    for record in records:
+        employee = {}
+        # Получаем простые поля
+        employee['postName'] = record.get('ПодразделениеНазвание')
+        employee['secondName'] = record.get('Фамилия')
+        employee['id'] = record.get('ИдСервисаПрофилей')
+        employee['name'] = record.get('Имя')
+        # Получаем информацию о фото
+        photo_info = record.get('PhotoData')
+        photo_url = photo_info.get('url', '')
+        if photo_url:
+            photo_url = ONLINE_URL + photo_url
+        employee['photoUrl'] = photo_url
+        result.append(employee)
+    return result
+
+
+def select_only_person(records, record_limit):
+    """
+        Выбирает только персоны (сотрудники) из выборки сотрудников.
+        Т.к. в выборке сотрудников могут быть еще и разделы.
+        :param records: список записей сотрудников
+        :param record_limit: ограничение на размер количества записей в результате
+        :return: список сотрудников
+    """
+    result = []
+    for record in records:
+        if not record.get('Раздел@'):
+            result.append(record)
+            if len(result) >= record_limit:
+                break
     return result
 
 def parse_result(body):

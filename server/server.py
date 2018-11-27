@@ -4,7 +4,9 @@
 """
 
 from flask import Flask
+from flask import request
 
+import datetime
 import json
 import bl_invoke
 
@@ -16,13 +18,32 @@ def about():
         Возвращает информацию о сервере
         :return: информация о сервере
     """
-    sid = '00000003-00066e3e-00ba-b977e62f351fda3b'
-    pid = 'fcdb06d6-1b50-4aee-8336-b13d39e19e65'
-    query_str = 'Демо'
-    contragent = '-2'
-    bl_invoke.get_contacts(sid, pid, query_str, contragent)
-    return "This is Flask server."
+    return "Flask server. Authors: ev.myshko, av.evharitskiy. Now: {now}".format(now=datetime.datetime.now())
 
+
+@flask_server.route('/contacts', methods=['POST'])
+def contacts():
+    """
+        Возвращает список контактов
+        :return: список контактов
+    """
+    # Получаем данные запроса
+    try:
+        raw_data = request.data.decode()
+        data = json.loads(raw_data)
+
+        # Заполняем параметры
+        sid = data.get('sid')
+        pid = data.get('pid')
+        query_str = data.get('query_str')
+        contragent = data.get('contragent')
+        record_limit = data.get('limit', 10)
+
+        # Вызываем метод получения контактов
+        contacts = bl_invoke.get_contacts(sid, pid, query_str, contragent, record_limit)
+    except Exception as exc:
+        return str(exc), 500
+    return str(contacts)
 
 
 if __name__ == '__main__':
