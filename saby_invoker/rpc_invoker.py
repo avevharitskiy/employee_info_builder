@@ -1,10 +1,9 @@
-import requests
 import urllib.parse as urlparse
-try:
-    import simplejson
-except ImportError:
-    raise RuntimeError("Не найдена библиотека simplejson! Пожалуйста установите ее.")
 
+import requests
+import simplejson
+
+from helpers import Configuration
 from saby_invoker.saby_formats_parser import parse_result
 
 
@@ -12,23 +11,27 @@ class RpcInvoker():
     """
     Класс вызова методов СБИС
     """
-    def __init__(self, address: str, session_id: str=None):
+    @classmethod
+    def initialize(cls, address: str, session_id: str = None):
         """
-        Создает экземпляр класса RpcInvoker
+        Инициализирует RpcInvoker
         :param address: адрес сайта, на который будет отправлен запрос
         :type address: str
         :param session_id: идентификатор сессии, defaults to None
         :param session_id: str, optional
         """
-        self.address = urlparse.urljoin(address, "/service/sbis-rpc-service300.dll")
+        cls.__address = urlparse.urljoin(address, "/service/sbis-rpc-service300.dll")
 
         if session_id is None:
-            with open('session', 'r') as session_file:
-                self.session = session_file.read()
+            try:
+                cls.__session = Configuration.app_config['Connection']['ssid']
+            except KeyError:
+                raise KeyError("В файле конфигурации не указан идентификатор сессии!")
         else:
-            self.session = session_id
+            cls.__session = session_id
 
-    def invoke(self, method_name: str, **params):
+    @classmethod
+    def invoke(cls, method_name: str, **params):
         """
         Вызывает метод бизнес логики с указанными параметрами
         :param method_name: имя метода
@@ -44,9 +47,9 @@ class RpcInvoker():
             "id": 1
         })
 
-        headers = {"Content-Type": "application/JSON; charset=utf-8", "X-SBISSessionID": self.session}
+        headers = {"Content-Type": "application/JSON; charset=utf-8", "X-SBISSessionID": cls.__session}
 
-        response = requests.post(url=self.address, data=body, headers=headers)
+        response = requests.post(url=cls.__address, data=body, headers=headers)
 
         if not response.ok:
             return {'error': "{code}: {reason}".format(code=response.status_code, reason=response.reason)}

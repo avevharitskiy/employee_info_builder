@@ -29,7 +29,7 @@ def __parse_recordset(recordset_dict: dict) -> list:
     return [__parse_record({'d': row}, keys) for row in recordset_dict['d']]
 
 
-def __parse_record(record_dict: dict, keys: list=None) -> dict:
+def __parse_record(record_dict: dict, keys: list = None) -> dict:
     """
     Parse SABY Record to python dictionary
 
@@ -42,7 +42,17 @@ def __parse_record(record_dict: dict, keys: list=None) -> dict:
     """
 
     keys = keys if keys else __get_keys(record_dict)
-    return {keys[ind]: record_dict['d'][ind] for ind in range(len(keys))}
+    result = {}
+    for ind in range(len(keys)):
+        value = record_dict['d'][ind]
+
+        if type(value) is dict and value.get("_type", None) in AVAILABLE_TYPES:
+            result[keys[ind]] = AVAILABLE_TYPES[value['_type']](value)
+
+        else:
+            result[keys[ind]] = value
+
+    return result
 
 
 def parse_result(result):
@@ -56,10 +66,11 @@ def parse_result(result):
     if type(result) is not dict:
         return result
 
-    available_types = {
+    saby_type = result.get('_type', None)
+    return AVAILABLE_TYPES.get(saby_type, __parse_default)(result)
+
+
+AVAILABLE_TYPES = {
         'recordset': __parse_recordset,
         'record': __parse_record,
-    }
-
-    saby_type = result.get('_type', None)
-    return available_types.get(saby_type, __parse_default)(result)
+}
