@@ -1,5 +1,5 @@
 import re
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, time
 from dateutil.relativedelta import relativedelta
 from dateutil.rrule import DAILY, rrule, MO, TU, WE, TH, FR
 from functools import lru_cache
@@ -7,6 +7,32 @@ from functools import lru_cache
 from helpers import Database
 from saby_invoker import SabyFormatsBuilder, SabyInvoker
 
+
+def __calculate_overwork(need_datetime_str, fact_datetime_str):
+    """
+    Возвращает время переработки. В случае недоработки возаращает нулевую дельту
+    :param need_datetime: необходимое время работы в формате: '%H:%M:%S'
+    :param fact_datetime: фактическое время работы в формате: '%H:%M:%S'
+    :return: timedelta переработки. В случае недоработки возвращает нулевую timedelta
+    """
+    need_datetime = None
+    fact_datetime = None
+    result = timedelta()
+
+    # Получаем необходимое время рабоы
+    if not need_datetime_str:
+        need_datetime_str = '00:00:00'
+    need_datetime = datetime.strptime(need_datetime_str, '%H:%M:%S')
+
+    # получаем фактическое время работы
+    if not fact_datetime_str:
+        fact_datetime_str = '00:00:00'
+    fact_datetime = datetime.strptime(fact_datetime_str, '%H:%M:%S')
+
+    if fact_datetime > need_datetime:
+        result = fact_datetime - need_datetime
+
+    return result
 
 def __convert_magic_string(magic_string: str) -> str:
     """
@@ -54,7 +80,6 @@ def __get_user_location_and_overwork(user_id: int):
     :type user_id: int
     """
     datelist = __get_date_range(date.today())
-
     for cur_date in datelist:
 
         rpc_result = SabyInvoker.invoke(
@@ -67,7 +92,6 @@ def __get_user_location_and_overwork(user_id: int):
                 "UnproductiveTime": True
             }
         )
-
         entrances = [entity for entity in rpc_result['activity_detail']['rec'] if entity['Описание'] == 'entrance']
 
         for entrance in entrances:
@@ -80,7 +104,13 @@ def __get_user_location_and_overwork(user_id: int):
                 (user_id, entrance["ВремяНачало"], entrance["Действие"])
             )
 
-        overwork = rpc_result['unproductive_time']
+        # Смотрим всю активность
+        activity_summary = rpc_result.get('activity_summary')
+
+        # Выбираем необходимое время работы
+        need_time_str = activity_summary.get('ВремяРаботыГрафик', '00:00:00')
+        # Выбираем фактически сколько сотрудник отработал
+        fact_time_str = activity_summary.get('ВремяРаботы', '00:00:00')
 
         Database.query(
             """
@@ -90,7 +120,7 @@ def __get_user_location_and_overwork(user_id: int):
             (
                 user_id,
                 cur_date,
-                __convert_magic_string(overwork['UsefulTime']) if overwork and overwork['UsefulTime'] else timedelta()
+                __calculate_overwork(need_time_str, fact_time_str)
             )
         )
 
