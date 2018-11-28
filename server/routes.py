@@ -34,8 +34,8 @@ def contacts():
         # Заполняем параметры
         query_str = data.get('query_str')
         record_limit = data.get('limit', 10)
-	    if not query_str:
-	        return 'Отсутствует параметр: query_str', 500
+        if not query_str:
+            return 'Отсутствует параметр: query_str', 500
         # Вызываем метод получения контактов
         contacts = get_contacts(query_str, record_limit=record_limit)
 
