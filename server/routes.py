@@ -2,15 +2,14 @@
     Модуль Flask. Предназначен для работы с запросами.
     Предоставляет API проекта.
 """
-
-from flask import Flask
-from flask import request
-
 import datetime
 import json
-import bl_invoke
 
-flask_server = Flask(__name__)
+from flask import request
+
+from api import get_contacts, get_user_info
+from server import flask_server
+
 
 @flask_server.route('/', methods=['GET', 'POST'])
 def about():
@@ -33,14 +32,11 @@ def contacts():
         data = json.loads(raw_data)
 
         # Заполняем параметры
-        sid = data.get('sid')
-        pid = data.get('pid')
         query_str = data.get('query_str')
-        contragent = data.get('contragent')
         record_limit = data.get('limit', 10)
 
         # Вызываем метод получения контактов
-        contacts = bl_invoke.get_contacts(sid, pid, query_str, contragent, record_limit)
+        contacts = get_contacts(query_str, record_limit=record_limit)
 
         # Преобразуем в JSON
         contacts = json.dumps(contacts)
@@ -49,5 +45,30 @@ def contacts():
     return str(contacts)
 
 
-if __name__ == '__main__':
-    flask_server.run()
+@flask_server.route("/get_user_info", methods=['POST'])
+def get_user_information():
+    """
+    Возвращает информацию по пользователю
+
+    :return: Информация по пользователю
+    :rtype: str
+    """
+
+    # get data
+    try:
+        raw_data = request.data.decode()
+        data = json.loads(raw_data)
+
+        # fill params
+        user_id = data.get('user_id')
+
+        # invoke data mining
+        user_info = get_user_info(user_id)
+
+        # build JSON string
+        user_info = json.dumps(user_info)
+
+    except BaseException as exc:
+        return str(exc), 500
+
+    return str(user_info)

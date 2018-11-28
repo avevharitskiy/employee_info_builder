@@ -12,7 +12,7 @@ class RpcInvoker():
     Класс вызова методов СБИС
     """
     @classmethod
-    def initialize(cls, address: str = None, session_id: str = None):
+    def initialize(cls, address: str = None):
         """
         Инициализирует RpcInvoker
         :param address: адрес сайта, на который будет отправлен запрос
@@ -28,42 +28,45 @@ class RpcInvoker():
 
         cls.__address = urlparse.urljoin(address, "/service/sbis-rpc-service300.dll")
 
-        if session_id is None:
-            try:
-                cls.__session = Configuration.app_config['SABY']['ssid']
-            except KeyError:
-                raise KeyError("В файле конфигурации не указан идентификатор сессии!")
-        else:
-            cls.__session = session_id
-
     @classmethod
-    def invoke(cls, method_name: str, **params):
+    def invoke(cls, method_name: str, session_id: str = None, **params):
         """
         Вызывает метод бизнес логики с указанными параметрами
         :param method_name: имя метода
         :type method_name: str
+        :param session_id: идентификатор сессии пользователя
+        :type session_id: str
+        :param person_id: идентификатор сессии пользователя
+        :type person_id: str
         :return: результат выполнения метода
         """
 
+        if session_id is None:
+            try:
+                session_id = Configuration.app_config['SABY']['session_id']
+            except KeyError:
+                raise KeyError("В файле конфигурации не указан идентификатор сессии!")
+
         body = simplejson.dumps({
             "jsonrpc": "2.0",
-            "protocol": 3,
+            "protocol": 5,
             "method": method_name,
             "params": params,
             "id": 1
         })
 
-        headers = {"Content-Type": "application/JSON; charset=utf-8", "X-SBISSessionID": cls.__session}
+        headers = {"Content-Type": "application/JSON; charset=utf-8", "X-SBISSessionID": session_id}
 
         response = requests.post(url=cls.__address, data=body, headers=headers)
+        response_dict = simplejson.loads(response.text)
 
         if not response.ok:
-            return {'error': "{code}: {reason}".format(code=response.status_code, reason=response.reason)}
+            result = {'error': "{code}: {reason}".format(code=response.status_code, reason=response.reason)}
 
-        response = simplejson.loads(response.text)
+            if 'error' in response_dict:
+                error = response_dict['error']
+                result['details'] = error['details'] if type(error) is dict else error
 
-        if 'error' in response:
-            error = response['error']
-            return {'error': error['details'] if type(error) is dict else error}
+            return result
 
-        return parse_value(response['result'])
+        return parse_value(response_dict['result'])

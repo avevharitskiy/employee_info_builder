@@ -13,6 +13,8 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
+none_type = type(None)
+
 saby_type_meta = namedtuple("saby_meta", 'type, converter')
 
 byte_saby_meta = saby_type_meta("Двоичное", lambda val: base64.b64encode(val).decode())
@@ -87,6 +89,7 @@ SABY_TYPES = {
     int: saby_type_meta("Число целое", lambda val: val),
     Decimal: saby_type_meta("Деньги", lambda val: val),
     str: saby_type_meta("Строка", lambda val: val),
+    none_type: saby_type_meta("Строка", lambda val: val),
     UUID: saby_type_meta("UUID", lambda val: str(val)),
     bytearray: byte_saby_meta,
     bytes: byte_saby_meta,

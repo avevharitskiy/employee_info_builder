@@ -1,14 +1,14 @@
-import calendar
 import re
-from datetime import date, datetime
+from datetime import date, timedelta
 from dateutil.relativedelta import relativedelta
+from dateutil.rrule import DAILY, rrule, MO, TU, WE, TH, FR
 from functools import lru_cache
 
 from helpers import Database
 from saby_invoker import SabyFormatsBuilder, SabyInvoker
 
 
-def convert_magic_string(magic_string: str) -> str:
+def __convert_magic_string(magic_string: str) -> str:
     """
     Преобразует магическую строку СБИС в понятную строку временного интервала
 
@@ -22,15 +22,16 @@ def convert_magic_string(magic_string: str) -> str:
     duration_regexp_dict = time_regexp.match(magic_string).groupdict()
     duration_dict = {key: int(val) if val else 0 for key, val in duration_regexp_dict.items()}
 
-    return "{hours}:{minutes}:{seconds}".format(
-                hours=duration_dict['days'] * 24 + duration_dict['hours'],
+    return timedelta(
+                days=duration_dict['days'],
+                hours=duration_dict['hours'],
                 minutes=duration_dict['minutes'],
                 seconds=duration_dict['seconds']
     )
 
 
 @lru_cache()
-def get_date_range(start_date: date, day_count: int = 90) -> list:
+def __get_date_range(start_date: date, day_count: int = 90) -> list:
     """
     Возвращает список дат, назад во времени от указанной даты
 
@@ -41,18 +42,18 @@ def get_date_range(start_date: date, day_count: int = 90) -> list:
     :return: список дат, назад во времени от указанной даты
     :rtype: list
     """
+    end_date = start_date - relativedelta(days=day_count)
+    return [str(date) for date in rrule(DAILY, dtstart=end_date, until=start_date, byweekday=(MO, TU, WE, TH, FR))]
 
-    return [str(start_date - relativedelta(days=day)) for day in range(0, day_count)]
 
-
-def get_user_location_and_overwork(user_id: int):
+def __get_user_location_and_overwork(user_id: int):
     """
     Получает данные местонахождения пользователя и сохраняет их в базу.
 
     :param user_id: идентификатор пользователя, по которому необходимо собрать статистику
     :type user_id: int
     """
-    datelist = get_date_range(date.today())
+    datelist = __get_date_range(date.today())
 
     for cur_date in datelist:
 
@@ -81,24 +82,27 @@ def get_user_location_and_overwork(user_id: int):
 
         overwork = rpc_result['unproductive_time']
 
-        if overwork and overwork['UsefulTime']:
-            Database.query(
-                """
-                INSERT INTO "UserOverwork" ("UserID", "Date", "Overwork")
-                VALUES (%s, %s, %s);
-                """,
-                (user_id, cur_date, convert_magic_string(overwork['UsefulTime']))
+        Database.query(
+            """
+            INSERT INTO "UserOverwork" ("UserID", "Date", "Overwork")
+            VALUES (%s, %s, %s);
+            """,
+            (
+                user_id,
+                cur_date,
+                __convert_magic_string(overwork['UsefulTime']) if overwork and overwork['UsefulTime'] else timedelta()
             )
+        )
 
 
-def get_user_activity(user_id: int):
+def __get_user_activity(user_id: int):
     """
     Получает данные активности пользователя и сохраняет их в базу.
 
     :param user_id: идентификатор пользователя, по которому необходимо собрать статистику
     :type user_id: int
     """
-    datelist = get_date_range(date(2018, 8, 21))
+    datelist = __get_date_range(date(2018, 8, 21))
 
     for cur_date in datelist:
 
@@ -110,7 +114,7 @@ def get_user_activity(user_id: int):
             ДопПоля=[]
         )
 
-        person_activities = [activity for activity in rpc_result['rec'] if activity['Parent@']]
+        person_activities = [activity for activity in rpc_result['rec'] if activity['Parent@']] if rpc_result else []
 
         for activity in person_activities:
             # write user activity
@@ -119,11 +123,11 @@ def get_user_activity(user_id: int):
                 INSERT INTO "UserActivity"("UserID", "Date", "Category", "WastedTime")
                 VALUES (%s, %s, %s, %s);
                 """,
-                (user_id, cur_date, activity['Name'], convert_magic_string(activity['Duration']))
+                (user_id, cur_date, activity['Name'], __convert_magic_string(activity['Duration']))
             )
 
 
-def get_plan_percent(user_id, month_count: int = 3):
+def __get_user_plan_percent(user_id, month_count: int = 3):
     """
     Получает данные по выполнению плана за указанный период и сохраняет их в базу.
 
@@ -148,7 +152,7 @@ def get_plan_percent(user_id, month_count: int = 3):
             Навигация=None,
             ДопПоля=[]
         )
-    percent_structure = rpc_result.get('outcome', None)
+    percent_structure = rpc_result.get('outcome', None) if rpc_result else None
 
     if percent_structure:
         Database.query(
@@ -160,7 +164,24 @@ def get_plan_percent(user_id, month_count: int = 3):
             )
 
 
-def test():
-    get_user_location_and_overwork(25550782)
-    # result = SabyInvoker.invoke("Местоположение.СводкаЗаДень", ЧастноеЛицо=16304156, Дата="2018-11-27", Опции={})
-    # print(result)
+def mine_user_info(user_id: int):
+    # Get user location and overwork
+    __get_user_location_and_overwork(user_id)
+
+    # Get user activity
+    __get_user_activity(user_id)
+
+    # Get user plan percent
+    __get_user_plan_percent(user_id)
+
+    # Add user id in mined persons
+    Database.query(
+        """
+            INSERT INTO "MinedUsers"("UserID")
+            VALUES (%s);
+        """,
+        (user_id,)
+    )
+
+    # Apply database changes
+    Database.commit_changes()
