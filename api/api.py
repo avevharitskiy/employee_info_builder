@@ -71,6 +71,9 @@ def __calculate_user_responsibility(user_id: int) -> int:
         (user_id,)
         )
 
+    if user_plan_percent:
+        user_plan_percent = user_plan_percent["PlanPercent"]
+
     # get user overwork
     user_overwork = Database.query_row(
         """
@@ -88,7 +91,7 @@ def __calculate_user_responsibility(user_id: int) -> int:
 
     # if find only user plan info return plan percent
     elif user_plan_percent and not user_overwork:
-        return int(user_plan_percent["PlanPercent"] / 10)
+        return int(user_plan_percent / 10)
 
     # if find user overwork info
     elif user_overwork:
