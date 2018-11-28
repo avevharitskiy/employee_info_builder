@@ -15,7 +15,7 @@ def get_user_info(user_id: int) -> dict:
 
     result = {}
     user_responsibility = __calculate_user_responsibility(user_id)
-    result['user_responsibility':user_responsibility]
+    result['user_responsibility'] = user_responsibility
     return result
 
 
