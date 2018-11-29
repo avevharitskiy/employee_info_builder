@@ -66,7 +66,7 @@ def get_user_information():
         user_id = data.get('user_id')
 
         # invoke data mining
-        user_info = get_user_info(user_id)
+        user_info = get_user_info(user_id, ssid)
 
         # build JSON string
         user_info = json.dumps(user_info)
