@@ -39,6 +39,7 @@ class Database():
                     "UserID" integer NOT NULL,
                     "Date" date,
                     "Category" text,
+                    "Useful" smallint,
                     "WastedTime" interval
                 )
                 WITH (
@@ -80,7 +81,8 @@ class Database():
             # MinedUsers table creation
             """
                 CREATE TABLE "MinedUsers"(
-                    "UserID" integer NOT NULL
+                    "UserID" integer NOT NULL,
+                    "TotalDays" integer
                 )
                 WITH (
                     OIDS=FALSE

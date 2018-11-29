@@ -32,12 +32,13 @@ def contacts():
         data = json.loads(raw_data)
 
         # Заполняем параметры
+        ssid = data.get('sid')
         query_str = data.get('query_str')
         record_limit = data.get('limit', 10)
         if not query_str:
             return 'Отсутствует параметр: query_str', 500
         # Вызываем метод получения контактов
-        contacts = get_contacts(query_str, record_limit=record_limit)
+        contacts = get_contacts(query_str, record_limit=record_limit, sid=ssid)
 
         # Преобразуем в JSON
         contacts = json.dumps(contacts)
@@ -61,6 +62,7 @@ def get_user_information():
         data = json.loads(raw_data)
 
         # fill params
+        ssid = data.get('sid')
         user_id = data.get('user_id')
 
         # invoke data mining

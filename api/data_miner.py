@@ -1,5 +1,5 @@
 import re
-from datetime import date, timedelta, datetime, time
+from datetime import date, timedelta, datetime
 from dateutil.relativedelta import relativedelta
 from dateutil.rrule import DAILY, rrule, MO, TU, WE, TH, FR
 from functools import lru_cache
@@ -33,6 +33,7 @@ def __calculate_overwork(need_datetime_str, fact_datetime_str):
         result = fact_datetime - need_datetime
 
     return result
+
 
 def __convert_magic_string(magic_string: str) -> str:
     """
@@ -72,18 +73,23 @@ def __get_date_range(start_date: date, day_count: int = 90) -> list:
     return [str(date) for date in rrule(DAILY, dtstart=end_date, until=start_date, byweekday=(MO, TU, WE, TH, FR))]
 
 
-def __get_user_location_and_overwork(user_id: int):
+def __get_user_location_and_overwork(user_id: int, sid: str, datelist: list = None):
     """
     Получает данные местонахождения пользователя и сохраняет их в базу.
 
     :param user_id: идентификатор пользователя, по которому необходимо собрать статистику
     :type user_id: int
+    :param datelist: список дат по которым необходимо собрать статистику, defaults to None
+    :param datelist: list, optional
     """
-    datelist = __get_date_range(date.today())
+    if not datelist:
+        datelist = __get_date_range(date.today())
+
     for cur_date in datelist:
 
         rpc_result = SabyInvoker.invoke(
             'Местоположение.СводкаЗаДень',
+            sid,
             ЧастноеЛицо=user_id,
             Дата=cur_date,
             Опции={
@@ -125,19 +131,23 @@ def __get_user_location_and_overwork(user_id: int):
         )
 
 
-def __get_user_activity(user_id: int):
+def __get_user_activity(user_id: int, sid: str, datelist: list = None):
     """
     Получает данные активности пользователя и сохраняет их в базу.
 
     :param user_id: идентификатор пользователя, по которому необходимо собрать статистику
     :type user_id: int
+    :param datelist: список дат по которым необходимо собрать статистику, defaults to None
+    :param datelist: list, optional
     """
-    datelist = __get_date_range(date(2018, 8, 21))
+    if not datelist:
+        datelist = __get_date_range(date.today())
 
     for cur_date in datelist:
 
         rpc_result = SabyInvoker.invoke(
             'Report.PersonProductivityStatistic',
+            sid,
             Фильтр=SabyFormatsBuilder.build_record({"Date": cur_date, "Person": user_id}),
             Сортировка=None,
             Навигация=None,
@@ -150,14 +160,14 @@ def __get_user_activity(user_id: int):
             # write user activity
             Database.query(
                 """
-                INSERT INTO "UserActivity"("UserID", "Date", "Category", "WastedTime")
-                VALUES (%s, %s, %s, %s);
+                INSERT INTO "UserActivity"("UserID", "Date", "Category", "Useful", "WastedTime")
+                VALUES (%s, %s, %s, %s, %s);
                 """,
-                (user_id, cur_date, activity['Name'], __convert_magic_string(activity['Duration']))
+                (user_id, cur_date, activity['Name'], activity['Useful'], __convert_magic_string(activity['Duration']))
             )
 
 
-def __get_user_plan_percent(user_id, month_count: int = 3):
+def __get_user_plan_percent(user_id: int, sid: str, month_count: int = 3):
     """
     Получает данные по выполнению плана за указанный период и сохраняет их в базу.
 
@@ -172,6 +182,7 @@ def __get_user_plan_percent(user_id, month_count: int = 3):
 
     rpc_result = SabyInvoker.invoke(
             'ПланРабот.ПунктыНаКарточкеСотрудника',
+            sid,
             Фильтр=SabyFormatsBuilder.build_record({
                 "ДатаНачала": str(start_date),
                 "ДатаОкончания": str(end_date),
@@ -194,23 +205,24 @@ def __get_user_plan_percent(user_id, month_count: int = 3):
             )
 
 
-def mine_user_info(user_id: int):
+def mine_user_info(user_id: int, sid: str):
+    dates = __get_date_range(date.today())
     # Get user location and overwork
-    __get_user_location_and_overwork(user_id)
+    __get_user_location_and_overwork(user_id, sid, dates)
 
     # Get user activity
-    __get_user_activity(user_id)
+    __get_user_activity(user_id, sid, dates)
 
     # Get user plan percent
-    __get_user_plan_percent(user_id)
+    __get_user_plan_percent(user_id, sid)
 
     # Add user id in mined persons
     Database.query(
         """
-            INSERT INTO "MinedUsers"("UserID")
-            VALUES (%s);
+            INSERT INTO "MinedUsers"("UserID", "TotalDays")
+            VALUES (%s, %s);
         """,
-        (user_id,)
+        (user_id, len(dates))
     )
 
     # Apply database changes

@@ -60,13 +60,14 @@ class RpcInvoker():
         response = requests.post(url=cls.__address, data=body, headers=headers)
         response_dict = simplejson.loads(response.text)
 
-        if not response.ok:
-            result = {'error': "{code}: {reason}".format(code=response.status_code, reason=response.reason)}
+        if not response.ok or 'error' in response_dict:
 
             if 'error' in response_dict:
                 error = response_dict['error']
-                result['details'] = error['details'] if type(error) is dict else error
+                message = error['details'] if type(error) is dict else error
+            else:
+                message = response.reason
 
-            return result
+            raise ConnectionAbortedError(message)
 
         return parse_value(response_dict['result'])

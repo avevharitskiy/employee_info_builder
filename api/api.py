@@ -1,5 +1,6 @@
 import urllib.parse as urlparse
 from datetime import timedelta
+from scipy.cluster.vq import kmeans
 
 from api import mine_user_info
 from helpers import Configuration, Database
@@ -7,15 +8,26 @@ from saby_invoker import SabyFormatsBuilder, SabyInvoker
 
 
 #   + Public methods
-def get_user_info(user_id: int) -> dict:
+def get_user_info(user_id: int, sid: str = None) -> dict:
     mined_users = [row["UserID"] for row in Database.query('SELECT * FROM "MinedUsers"')]
 
     if user_id not in mined_users:
-        mine_user_info(user_id)
+        mine_user_info(user_id, sid)
+
+    # get user days count in dataset (except weekends)
+    total_days = Database.query_row(
+        'select "TotalDays" from  "MinedUsers" where "UserID" = %s',
+        (user_id,)
+    )['TotalDays']
 
     result = {}
-    user_responsibility = __calculate_user_responsibility(user_id)
-    result['user_responsibility'] = user_responsibility
+
+    result['user_responsibility'] = __calculate_user_responsibility(user_id)
+    result['user_sociability'] = __calculate_user_sociability(user_id, total_days)
+    result['user_procrastination'] = __calculate_user_procrastination(user_id, total_days)
+    result['user_often_leaving'] = __calculate_user_leaving(user_id)
+    result['user_punctuality'] = __calculate_user_punctuality(user_id)
+
     return result
 
 
@@ -60,7 +72,155 @@ def get_contacts(query_str, contragent="-2", record_limit=10, sid=None):
 
 
 #   + Private methods
+def __calculate_user_punctuality(user_id: int) -> int:
+    # !Settings
+    # max deviation minutes per day (setting)
+    MAX_DEVIATION = 30
+
+    user_incoming = Database.query(
+        """
+        With "Dates" as (
+            select "DateTime"::date as "Date"
+            from "UserLocation"
+            Where "UserID" = %s and "Status" = 1
+            group by "Date"
+        )
+        select dates."Date", min(main."DateTime"::time) as "ComingTime"
+        from "UserLocation" as main
+        inner join "Dates" as dates
+            on dates."Date" = main."DateTime"::date
+        group by dates."Date"
+        order by dates."Date"
+        """,
+        (user_id,)
+    )
+    if user_incoming:
+        # get user incoming times as seconds
+        timelist = [row['ComingTime'] for row in user_incoming]
+        timelist = [timedelta(hours=x.hour, minutes=x.minute, seconds=x.second).total_seconds() for x in timelist]
+
+        # convert max deviation to seconds
+        time_max_deviation = timedelta(minutes=MAX_DEVIATION).total_seconds()
+
+        # calculate average tive with deviation
+        k_mean = kmeans(timelist, 1)[0][0]
+        max_time = k_mean + time_max_deviation
+        min_time = k_mean - time_max_deviation
+
+        # find punctual points
+        punctual = [time for time in timelist if time > min_time and time < max_time]
+        return int(len(punctual) / len(timelist) * 10)
+
+    return -1
+
+def __calculate_user_leaving(user_id: int) -> bool:
+    '''
+    Расчитывает флаг часто ли пользователь уходит из офиса
+
+    :param user_id: идентификатор пользователя
+    :type user_id: int
+    :return: флаг частого покидания офиса
+    :rtype: bool
+    '''
+
+    # !Settings
+    # max user leavings per day (setting)
+    MAX_LEAVING = 3
+
+    user_leavings = Database.query_row(
+        """
+        select avg("LeavingCount") as "AvgLeavings"
+        from (
+            select "DateTime"::date as "Date" , count("Status") as "LeavingCount"
+            from "UserLocation"
+            where "UserID" = %s and "Status" = 0
+            group by "Date"
+        ) as "LeavingPerDay"
+        """,
+        (user_id,)
+    )
+    if user_leavings:
+        return True if int(user_leavings["AvgLeavings"]) > MAX_LEAVING else False
+    else:
+        return None
+
+
+def __calculate_user_procrastination(user_id: int, total_days: int) -> int:
+    '''
+    Расчитывает показатель прокрастенации пользователя
+
+    :param user_id: идентификатор пользователя
+    :type user_id: int
+    :param total_days: кол-во дней по которым собрана статистика на пользователя
+    :type total_days: int
+    :return: [показатель прокрастенации пользователя
+    :rtype: int
+    '''
+
+    # !Settings
+    # max user procrastination minutes per day (setting)
+    MAX_PROCRASTINATION = 45
+
+    user_procrastination = Database.query_row(
+        """
+        select sum("WastedTime") as "WastedTime" from "UserActivity"
+        where "UserID" = %s and "Useful" = -1
+        """,
+        (user_id,)
+    )['WastedTime']
+    if user_procrastination:
+        total_procrastenation = timedelta(minutes=MAX_PROCRASTINATION * total_days)
+        result = int(user_procrastination.total_seconds() / total_procrastenation.total_seconds() * 10)
+
+        return 10 if result > 10 else result
+
+    else:
+        return 0
+
+
+def __calculate_user_sociability(user_id: int, total_days: int) -> int:
+    """
+    Расчитывает показатель комуникабельности человека
+
+    :param user_id: идентификатор пользователя
+    :type user_id: int
+    :param total_days: кол-во дней по которым собрана статистика на пользователя
+    :type total_days: int
+    :return: аоказатель коммуникабельности
+    :rtype: int
+    """
+
+    # !Settings
+    # max user not work communication minutes per day (setting)
+    MAX_COMMUNICATION = 15
+
+    user_communication = Database.query_row(
+        """
+        select sum("WastedTime") as "WastedTime"
+        from  "UserActivity"
+        where "UserID" = %s and "Category" like 'Обмен сообщениями %%'
+        """,
+        (user_id,)
+    )
+
+    if user_communication:
+        max_user_communication = timedelta(minutes=MAX_COMMUNICATION * total_days)
+        result = int(user_communication['WastedTime'].total_seconds() / max_user_communication.total_seconds() * 10)
+        return 10 if result > 10 else result
+    else:
+        return -1
+
+
 def __calculate_user_responsibility(user_id: int) -> int:
+    '''
+    Расчитывает показатель ответственности человека
+
+    :param user_id: идентификатор пользователя
+    :type user_id: int
+    :return: показатель ответственности человека
+    :rtype: int
+    '''
+
     # !Settings
     # max overwork hours per day (setting)
     MAX_OVERWORK = 2
