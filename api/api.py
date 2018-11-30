@@ -113,6 +113,7 @@ def __calculate_user_punctuality(user_id: int) -> int:
 
     return -1
 
+
 def __calculate_user_leaving(user_id: int) -> bool:
     '''
     Расчитывает флаг часто ли пользователь уходит из офиса
@@ -139,7 +140,7 @@ def __calculate_user_leaving(user_id: int) -> bool:
         """,
         (user_id,)
     )
-    if user_leavings:
+    if user_leavings['AvgLeavings']:
         return True if int(user_leavings["AvgLeavings"]) > MAX_LEAVING else False
     else:
         return None
@@ -167,10 +168,10 @@ def __calculate_user_procrastination(user_id: int, total_days: int) -> int:
         where "UserID" = %s and "Useful" = -1
         """,
         (user_id,)
-    )['WastedTime']
-    if user_procrastination:
+    )
+    if user_procrastination['WastedTime']:
         total_procrastenation = timedelta(minutes=MAX_PROCRASTINATION * total_days)
-        result = int(user_procrastination.total_seconds() / total_procrastenation.total_seconds() * 10)
+        result = int(user_procrastination['WastedTime'].total_seconds() / total_procrastenation.total_seconds() * 10)
 
         return 10 if result > 10 else result
 
@@ -203,7 +204,7 @@ def __calculate_user_sociability(user_id: int, total_days: int) -> int:
         (user_id,)
     )
 
-    if user_communication:
+    if user_communication["WastedTime"]:
         max_user_communication = timedelta(minutes=MAX_COMMUNICATION * total_days)
         result = int(user_communication['WastedTime'].total_seconds() / max_user_communication.total_seconds() * 10)
         return 10 if result > 10 else result
