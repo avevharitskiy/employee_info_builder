@@ -1,10 +1,15 @@
+import base64
+import json
 import urllib.parse as urlparse
 from datetime import timedelta
+import numpy
+
 from scipy.cluster.vq import kmeans
 
 from api import mine_user_info
 from helpers import Configuration, Database
 from saby_invoker import SabyFormatsBuilder, SabyInvoker
+from neural_network import NeuralNetwork
 
 
 #   + Public methods
@@ -27,6 +32,7 @@ def get_user_info(user_id: int, sid: str = None) -> dict:
     result['user_procrastination'] = __calculate_user_procrastination(user_id, total_days)
     result['user_often_leaving'] = __calculate_user_leaving(user_id)
     result['user_punctuality'] = __calculate_user_punctuality(user_id)
+    result['user_leaving_state'] = __calculate_user_leaving_state(user_id)
 
     return result
 
@@ -72,6 +78,24 @@ def get_contacts(query_str, contragent="-2", record_limit=10, sid=None):
 
 
 #   + Private methods
+def __calculate_user_leaving_state(user_id: int) -> int:
+    try:
+        user_neural_data = Database.query_row(
+            """
+            select "UserFirstCalls", "UserLastCalls", "UserFirstDuration", "UserLastDuration", "UserFirstOverwork", "UserLastOverwork"
+            from "UsersNeuralData"
+            where "UserID" = %s
+            """,
+            (user_id,)
+        )
+        XpredictInputData = numpy.array([list(user_neural_data)])
+        print(XpredictInputData)
+        with NeuralNetwork.graph.as_default():
+            return int(round(NeuralNetwork.model.predict(XpredictInputData)[0][0] * 10))
+    except BaseException as exc:
+        print(exc)
+        return -1
+
 def __calculate_user_punctuality(user_id: int) -> int:
     # !Settings
     # max deviation minutes per day (setting)
@@ -109,7 +133,7 @@ def __calculate_user_punctuality(user_id: int) -> int:
 
         # find punctual points
         punctual = [time for time in timelist if time > min_time and time < max_time]
-        return int(len(punctual) / len(timelist) * 10)
+        return int(round(len(punctual) / len(timelist) * 10))
 
     return -1
 
@@ -171,7 +195,7 @@ def __calculate_user_procrastination(user_id: int, total_days: int) -> int:
     )
     if user_procrastination['WastedTime']:
         total_procrastenation = timedelta(minutes=MAX_PROCRASTINATION * total_days)
-        result = int(user_procrastination['WastedTime'].total_seconds() / total_procrastenation.total_seconds() * 10)
+        result = int(round(user_procrastination['WastedTime'].total_seconds() / total_procrastenation.total_seconds() * 10))
 
         return 10 if result > 10 else result
 
@@ -192,21 +216,21 @@ def __calculate_user_sociability(user_id: int, total_days: int) -> int:
     """
 
     # !Settings
-    # max user not work communication minutes per day (setting)
-    MAX_COMMUNICATION = 15
+    # max user communication minutes per day (setting)
+    MAX_COMMUNICATION = 45
 
     user_communication = Database.query_row(
         """
         select sum("WastedTime") as "WastedTime"
         from  "UserActivity"
-        where "UserID" = %s and "Category" like 'Обмен сообщениями %%'
+        where "UserID" = %s and "Category" in ('Обмен сообщениями (IM, Почта)', 'Звонки СБИС')
         """,
         (user_id,)
     )
 
     if user_communication["WastedTime"]:
         max_user_communication = timedelta(minutes=MAX_COMMUNICATION * total_days)
-        result = int(user_communication['WastedTime'].total_seconds() / max_user_communication.total_seconds() * 10)
+        result = int(round(user_communication['WastedTime'].total_seconds() / max_user_communication.total_seconds() * 10))
         return 10 if result > 10 else result
     else:
         return -1
@@ -299,9 +323,12 @@ def __formatting(records):
         employee['id'] = record.get('Лицо')
         employee['name'] = record.get('Имя')
         # Получаем информацию о фото
-        photo_info = record.get('PhotoData')
-        photo_url = photo_info.get('url', '')
-        if photo_url:
+        photo_id = record.get('PhotoID', None)
+        if photo_id:
+            photo_id_base64 = base64.b64encode((json.dumps({"Id": photo_id})).encode())
+            photo_url = 'previewer/280/service/?id=3&method=ProfileService.BigPhoto&protocol=5&params={}'.format(
+                urlparse.quote_plus(photo_id_base64)
+            )
             photo_url = urlparse.urljoin(Configuration.app_config['SABY']['site'], photo_url)
         employee['photoUrl'] = photo_url
         result.append(employee)

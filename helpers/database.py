@@ -88,6 +88,22 @@ class Database():
                     OIDS=FALSE
                 );
             """
+            # User neural_data table
+            """
+                CREATE TABLE "UsersNeuralData"(
+                    "UserID" integer NOT NULL,
+                    "UserFirstCalls" real,
+                    "UserLastCalls" real,
+                    "UserFirstDuration" real,
+                    "UserLastDuration" real,
+                    "UserFirstOverwork" real,
+                    "UserLastOverwork" real
+                )
+                WITH (
+                    OIDS=FALSE
+                );
+            """
+
 
         )
         # create tables
